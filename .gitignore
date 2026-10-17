@@ -1,0 +1,13 @@
+.DS_Store
+*.3FR
+*.3fr
+*.fff
+*.tif
+*.tiff
+*.dng
+*.rgb16
+outputs/
+runs/
+*.log
+.env
+__pycache__/
