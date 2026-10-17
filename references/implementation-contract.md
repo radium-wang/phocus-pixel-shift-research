@@ -1,11 +1,74 @@
 # Implementation contract
 
-This skill deliberately separates reusable orchestration from vendor-owned components.
+## Dependencies and limits
 
-The reusable part scans user-owned `.3FR` files, groups frames, hashes inputs, invokes a user-local bridge, and verifies outputs. The bridge and the Phocus frameworks remain on the user's machine.
+Python 3.10+ is required. Scanning works across platforms; optional `exiftool` provides capture timestamps. Native execution requires macOS, the user's own Phocus installation (default `/Applications/Phocus.app`), and a separately supplied bridge. The repository does not build, download or distribute that bridge or vendor components. Installing the skill alone does not provide merging.
 
-A local bridge may be built or configured by the user under their own Phocus license. The skill must not download or redistribute Phocus frameworks, extracted symbols, proprietary model files, or license material. It also must not patch a binary to defeat authorization or integrity checks.
+## Grouping and manifest
 
-A 4- or 6-frame FFF is an intermediate native result unless a native export step writes a verified color-managed TIFF. A 16-frame result may use a native multi-shot input path without proving that the binary contains a separate 16-shot kernel. Preserve that distinction in reports.
+The scanner writes schema `phocus-pixel-shift/2` with every discovered frame's path, size, SHA-256, sort coordinate and timestamp source. It refuses to overwrite an existing manifest. Output/source directories and confirmed file order must remain stable between review and execution.
 
-The wrapper records source directory, manifest, file hashes, Phocus path/version, bridge hash, command, environment flags, logs, output type, dimensions, and cleanup events. The workflow is read-only with respect to the camera and does not upload photographs by default.
+EXIF is used only when all frames have parseable timestamps on the same time basis. `OffsetTimeOriginal` and `SubSecTimeOriginal` are read. Without an offset, EXIF is a shared wall-clock coordinate, not an asserted UTC capture time. Mixed offset/no-offset or incomplete EXIF makes the entire scan use mtime with a warning. Results from individual files survive nonzero exiftool exit; lookup uses a stdin argument file and a 120-second timeout. Copied mtimes and camera clock changes can make inferred grouping unreliable.
+
+Time-based groups never span separate immediate parent directories. Counts other than exactly 4/6/16 are retained but not selected. Even valid counts are unconfirmed by default. `--confirm-group ID` confirms a candidate on a fresh scan. `--expected-count N` filters, without confirming. No automatic integer-multiple splitting is performed.
+
+For known capture order, provide `--groups-file` with a JSON array of arrays of relative paths:
+
+```json
+[["shot01.3FR", "shot02.3FR", "shot03.3FR", "shot04.3FR"]]
+```
+
+This is an explicit grouping confirmation. Paths must stay inside the scanned directory; duplicates are rejected. Omitted frames are reported. To change confirmed grouping, create and review a fresh manifest, rather than merely flipping `selected` in an old v1 file.
+
+## Bridge identity and invocation
+
+Only `--bridge` (highest priority) or `PHOCUS_NATIVE_BRIDGE` is used. No directory search is performed. `--bridge-sha256` is required and compared before execution and before each group. Pin an expected digest from a trusted build record; a digest identifies bytes, not their safety or licensing status.
+
+```text
+native-fff-bridge <frames> <output> <frame-1.3FR> ... <frame-N.3FR>
+```
+
+4/6-frame destinations use `.fff`; 16-frame destinations use `.rgb16`. These are intermediates, not finished color-managed images. A successful exit must produce a nonempty intermediate. An explicit native TIFF request must also produce an inspectable TIFF.
+
+The runner rejects non-macOS execution and records Phocus version/build from `Contents/Info.plist`. It supports `--phocus-app` for a user-installed alternate location. It does not assert that the bundle is vendor-authentic merely because Info.plist exists.
+
+## Optional bridge profile
+
+Supply `--bridge-profile /path/to/reviewed-profile.json`. This declares capabilities known from the bridge's documentation; it does not auto-probe or certify them. Example shape (replace placeholder hashes with trusted 64-character digests):
+
+```json
+{
+  "supportedEnvironment": [
+    "PHOCUS_PROBE_LABEL",
+    "PHOCUS_ROUNDTRIP_FILE",
+    "PHOCUS_NATIVE_TIFF_FILE",
+    "PHOCUS_RETAIN_NATIVE_TIFF"
+  ],
+  "frameworkSha256": {}
+}
+```
+
+`frameworkSha256` optionally maps paths relative to Phocus.app to expected SHA-256 digests. All configured hashes must match; no automatic acceptance on software update. An empty map explicitly means no framework hashes were checked.
+
+Inherited `PHOCUS_*` variables are removed from the child environment. `PHOCUS_PROBE_LABEL` is set only if declared. With `--native-tiff`, both `PHOCUS_ROUNDTRIP_FILE` and `PHOCUS_NATIVE_TIFF_FILE` must be declared. Only declared flags from the following list are set to `1`:
+
+- `PHOCUS_RETAIN_NATIVE_TIFF`
+- `PHOCUS_CALIBRATED_PROBE`
+- `PHOCUS_USE_NATIVE_FILE_WRITER`
+- `PHOCUS_ALLOW_NATIVE_64BIT_REOPEN`
+
+No native export flags or paths are set without `--native-tiff`. Undocumented variables are rejected. The exact profile and effective environment are recorded.
+
+## Records and failures
+
+Use a new output directory. Manifest validation rejects unsafe group IDs, unconfirmed selected groups, wrong frame counts, duplicated selected inputs and paths outside the source directory. Each group's input size and SHA-256 are checked against the manifest before bridge launch. Inputs and configured binaries must remain unchanged for the duration of execution; concurrent replacement is unsupported.
+
+The runner writes top-level `run.json` before processing and updates it atomically after each group. Each attempted group has status, timestamps, elapsed time, checked inputs, effective environment, command when launched, error/exit code and retained-file cleanup record. Launched groups have raw-byte stdout/stderr logs. Normal failures continue to the next group; Ctrl-C terminates the active process group, records interruption and lists unattempted groups. Timeout defaults to 3600 seconds per group and kills the process group. SIGKILL, power loss or disk failure can prevent finalization; the latest saved record may remain `running`.
+
+Partial outputs are retained. No temporary artifacts are deleted automatically. Successful and normally failed bridge exits record discovered intermediate/TIFF/roundtrip files, sizes and hashes. A failure before launch has no bridge logs. Preflight failures return without creating an output directory.
+
+`inspect_output.py` reads classic TIFF/BigTIFF first-IFD metadata without third-party packages. It reports dimensions, bits per sample, channel count, sample format and byte size. It does not decode pixel data, inspect all pages, verify HNCS/color accuracy or prove that the complete native processing route was used. FFF/RGB intermediates receive only size/hash/type records; dimensions remain unknown. Acceptance of 16-frame input does not establish a distinct 16-shot capture kernel.
+
+## Offline validation
+
+Run `python3 -m unittest discover -s tests -v`. Tests use synthetic `.3FR` bytes, fake application metadata and a fixture bridge. They validate orchestration only, not Phocus compatibility, photographic quality or hardware behavior. No camera, vendor framework or real image merge is invoked.

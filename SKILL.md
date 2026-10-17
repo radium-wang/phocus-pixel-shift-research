@@ -1,51 +1,24 @@
 ---
 name: phocus-pixel-shift-research
-description: Run local Hasselblad X2D 3FR pixel-shift research workflows through the user's own Phocus installation.
+description: Scan local Hasselblad X2D 3FR sequences and run a user-configured Phocus bridge for pixel-shift research; requires a separate bridge for merging.
 ---
 
 # Phocus Pixel-Shift Research
 
-Use this skill when the user gives a local directory of Hasselblad X2D `.3FR` files and asks to merge or inspect 4-, 6-, or 16-frame pixel-shift sequences.
+Use for local `.3FR` sequence inspection or 4/6/16-frame research runs. This repository supplies orchestration, not the native bridge. A photo directory alone is sufficient for scanning; merging also requires a separately configured bridge, a trusted expected SHA-256, macOS and the user's licensed Phocus installation. State this dependency before promising a merge. Do not install this skill locally unless requested.
 
-The user only needs to provide the photo directory in the conversation. Treat the directory as the source of truth, scan it recursively, and preserve the originals. Do not ask for frame counts when the scan identifies an unambiguous 4-, 6-, or 16-frame group.
+## Workflow
 
-## Required workflow
+1. Run `scripts/scan_3fr_sequences.py <photo-dir> -o <new-candidates.json>`. Preserve originals. Read every group's files, timestamp source and warnings. Exact frame count and a time gap are only grouping candidates, not proof of a capture sequence. Do not guess frame order or split 8/12/16 frames into smaller sequences by arithmetic.
+2. Confirm groups against capture records, sequence metadata or user-provided grouping. If that evidence is unavailable, ask for grouping confirmation. Write a new manifest with `--confirm-group group-001` (repeat as needed), or `--groups-file <groups.json>` containing ordered relative-path arrays. `--expected-count` only filters; it does not confirm a sequence. A changing source directory requires a fresh review of candidate IDs.
+3. Resolve the bridge only from `--bridge` or `PHOCUS_NATIVE_BRIDGE`. Obtain its expected hash from a trusted build/configuration record; calculating a hash of an unknown executable does not establish trust. Stop with configuration instructions when the bridge is absent. Do not search personal directories, download vendor binaries or invent a replacement bridge.
+4. Run `scripts/run_local_bridge.py <confirmed-manifest> -o <new-run-dir> --bridge <path> --bridge-sha256 <expected-digest>`. The runner supports `--phocus-app <path>` and configurable `--timeout-seconds` (default 3600 per group). It checks input hashes before each group, pins the bridge hash, reads the Phocus version, and verifies framework hashes if configured in a bridge profile.
+5. Only request `--native-tiff` with a reviewed `--bridge-profile` declaring the supported variables. The runner clears inherited `PHOCUS_*` variables and sets only supported ones. See [references/implementation-contract.md](references/implementation-contract.md) for the profile and CLI contract.
+6. Read top-level and per-group `run.json` files. Normal group failures continue; interruption stops the run. Preserve partial outputs, byte logs and cleanup records. The runner retains temporary files for audit; it does not automatically delete them. All-failed or partial-failed runs return nonzero.
+7. TIFF output gets independent first-IFD dimensions, bit depth, channels and size inspection; this is not full pixel decoding or proof of HNCS/native color accuracy. FFF/RGB outputs remain unverified intermediates with unknown dimensions unless separately inspected. Do not label them as finished images. Do not call 16-frame input a distinct 16-shot kernel without independent evidence.
 
-1. Run `scripts/scan_3fr_sequences.py` on the user directory. Write a manifest beside the outputs and report every discovered `.3FR`, its timestamp source, size, and SHA-256. Accept only groups with exactly 4, 6, or 16 frames unless the user explicitly asks for another grouping.
-2. Resolve a local native bridge from `PHOCUS_NATIVE_BRIDGE`, a project-local `native-fff-bridge`, or an explicitly supplied path. The bridge must use the user's own licensed Phocus installation. If no bridge is available, stop with the exact configuration needed; do not download, copy, or reconstruct Phocus binaries.
-3. Run `scripts/run_local_bridge.py` with the manifest and an output directory. Use a new run directory such as `<photo-dir>/phocus-pixel-shift-run-YYYYMMDD-HHMMSS`; never overwrite source files or an existing result.
-4. Before execution, verify that `/Applications/Phocus.app` exists, record its version if available, and record the bridge SHA-256. Refuse to run when a configured bridge hash or Phocus framework hash check fails.
-5. For each group, retain the native output, a per-group JSON record, stdout/stderr logs, input hashes, and a cleanup record for temporary files. Use the native full TIFF export only when the local bridge supports `PHOCUS_NATIVE_TIFF_FILE`; otherwise label the result as an intermediate FFF/RGB buffer rather than a finished image.
-6. After completion, independently inspect output dimensions, bit depth, channel count, and file size. Report whether the result is a native TIFF, FFF, or intermediate buffer. Do not call a 16-frame result a separate 16-shot kernel unless the local evidence proves that.
-7. Keep the summary short: groups found, output paths, completion/failure, and any limitation. Only create visual comparisons or JSR comparisons when the user requests them.
+Report groups, success/failure, outputs and limitations briefly. Make visual/JSR comparisons only when requested.
 
-## Safety and distribution boundary
+## Distribution boundary
 
-- This skill is an orchestration layer; it must not contain Phocus binaries, private frameworks, extracted vendor code, proprietary resources, license keys, or firmware patches.
-- Do not bypass Phocus licensing, integrity checks, authentication, or camera firmware safeguards. Do not write to a camera.
-- The user must have a lawful, licensed local Phocus installation and their own source files.
-- Describe the result as local research and interoperability testing. Do not claim that the camera-side capture trigger, a public 6/16-frame UI, or a distinct 16-shot algorithm has been discovered unless independently verified.
-- Do not upload photos or send results to external services unless the user explicitly requests a named destination.
-
-## Bridge contract
-
-The bridge is a user-local executable, not shipped by this skill. It accepts:
-
-```text
-native-fff-bridge <frames> <output> <frame-1.3FR> ... <frame-N.3FR>
-```
-
-`frames` must be 4, 6, or 16. For full native export, the bridge may honor these optional environment variables:
-
-```text
-PHOCUS_ROUNDTRIP_FILE=<temporary native round-trip file>
-PHOCUS_NATIVE_TIFF_FILE=<finished TIFF destination>
-PHOCUS_RETAIN_NATIVE_TIFF=1
-PHOCUS_CALIBRATED_PROBE=1
-PHOCUS_USE_NATIVE_FILE_WRITER=1
-PHOCUS_ALLOW_NATIVE_64BIT_REOPEN=1
-```
-
-Only set these variables when the bridge documents that it supports them. The wrapper never assumes that an FFF or RGB buffer is a finished color-managed TIFF.
-
-For the legal and technical rationale behind this boundary, read [references/implementation-contract.md](references/implementation-contract.md).
+Keep vendor binaries, private frameworks, extracted vendor code, license material and firmware patches out of the repository. Use the user's authorized local installation without bypassing licensing or integrity checks. Do not write to a camera or upload photographs without explicit authorization. This workflow does not implement camera-side capture or provide a public 6/16-frame camera trigger.
