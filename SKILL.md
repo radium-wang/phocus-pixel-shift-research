@@ -5,7 +5,7 @@ description: Scan local Hasselblad X2D 3FR sequences and run a user-configured P
 
 # Phocus Pixel-Shift Research
 
-Use for local `.3FR` sequence inspection or 4/6/16-frame research runs. This repository supplies orchestration, not the native bridge. A photo directory alone is sufficient for scanning; merging also requires a separately configured bridge, a trusted expected SHA-256, macOS and the user's licensed Phocus installation. The skill may call Phocus components that the user has installed and is authorized to use. The repository does not package, distribute or automatically obtain those components; the user is responsible for confirming the applicable license and permissions. State this dependency before promising a merge. Do not install this skill locally unless requested.
+Use for local `.3FR` sequence inspection or 4/6/16-frame research runs. This repository supplies orchestration, not the native bridge. On Windows, use `scripts/discover_phocus_windows.py` first to inventory a user-installed Phocus executable and local integration clues; a report is evidence for review, not proof of a merge path. A photo directory alone is sufficient for scanning; merging also requires a separately configured bridge, a trusted expected SHA-256, macOS and the user's licensed Phocus installation. The skill may call Phocus components that the user has installed and is authorized to use. The repository does not package, distribute or automatically obtain those components; the user is responsible for confirming the applicable license and permissions. State this dependency before promising a merge. Do not install this skill locally unless requested.
 
 ## Workflow
 
@@ -17,7 +17,7 @@ Use for local `.3FR` sequence inspection or 4/6/16-frame research runs. This rep
 6. Read top-level and per-group `run.json` files. Normal group failures continue; interruption stops the run. Preserve partial outputs, byte logs and cleanup records. The runner retains temporary files for audit; it does not automatically delete them. All-failed or partial-failed runs return nonzero.
 7. TIFF output gets independent first-IFD dimensions, bit depth, channels and size inspection; this is not full pixel decoding or proof of HNCS/native color accuracy. FFF/RGB outputs remain unverified intermediates with unknown dimensions unless separately inspected. Do not label them as finished images. Do not call 16-frame input a distinct 16-shot kernel without independent evidence.
 
-Report groups, success/failure, outputs and limitations briefly. Make visual/JSR comparisons only when requested.
+On Windows, discovery is read-only inventory plus bounded `--version`/`--help` probes. It does not copy application files or infer that a plugin name is a working merge route. A bridge still needs explicit implementation or user configuration. Report groups, success/failure, outputs and limitations briefly. Make visual/JSR comparisons only when requested.
 
 ## Distribution boundary
 

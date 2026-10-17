@@ -2,7 +2,7 @@
 
 ## Dependencies and limits
 
-Python 3.10+ is required. Scanning works across platforms; optional `exiftool` provides capture timestamps. Native execution requires macOS, the user's own Phocus installation (default `/Applications/Phocus.app`), and a separately supplied bridge. The skill may call Phocus components that the user has installed and is authorized to use. The repository does not package, distribute or automatically obtain those components; the user is responsible for confirming the applicable license and permissions. Installing the skill alone does not provide merging.
+Python 3.10+ is required. Scanning works across platforms; optional `exiftool` provides capture timestamps. Native execution requires macOS, the user's own Phocus installation (default `/Applications/Phocus.app`), and a separately supplied bridge. The skill may call Phocus components that the user has installed and is authorized to use. The repository does not package, distribute or automatically obtain those components; the user is responsible for confirming the applicable license and permissions. Installing the skill alone does not provide merging. On Windows, `discover_phocus_windows.py` produces a read-only inventory report and bounded help/version probes; it does not prove a merge path.
 
 ## Grouping and manifest
 
@@ -72,3 +72,9 @@ Partial outputs are retained. No temporary artifacts are deleted automatically. 
 ## Offline validation
 
 Run `python3 -m unittest discover -s tests -v`. Tests use synthetic `.3FR` bytes, fake application metadata and a fixture bridge. They validate orchestration only, not Phocus compatibility, photographic quality or hardware behavior. No camera, vendor framework or real image merge is invoked.
+
+## Windows discovery
+
+Run `python scripts/discover_phocus_windows.py -o phocus-windows-discovery.json` on Windows. Use `--phocus C:\Path\to\Phocus.exe` for an explicit executable or repeat `--root` for an offline fixture. The default search checks common Program Files and Local AppData layouts and uses a bounded recursive search of each supplied root.
+
+The report contains the executable path, SHA-256, bounded `--version` and `--help` output, adjacent layout directories, and filename hints containing terms such as `multishot`, `pixel`, `shift`, `merge`, `export`, `batch`, `cli`, or `headless`. These are discovery clues only. The script never copies, modifies, decompiles or patches Phocus files and never creates merged image output. A user must verify a candidate workflow visibly in their licensed Phocus installation before configuring a Windows bridge.

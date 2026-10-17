@@ -238,3 +238,36 @@ class WorkflowTests(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+class WindowsDiscoveryTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.root = Path(self.tmp.name)
+        self.exe = self.root / 'Hasselblad' / 'Phocus' / 'Phocus.exe'
+        self.exe.parent.mkdir(parents=True)
+        self.exe.write_bytes(b'fixture phocus executable')
+        self.exe.chmod(0o700)
+        (self.exe.parent / 'Plugins').mkdir()
+        (self.exe.parent / 'Plugins' / 'PixelShiftExport.plugin').write_bytes(b'fixture')
+
+    def test_bounded_discovery_and_no_overwrite(self):
+        import discover_phocus_windows as discovery
+        self.assertEqual([self.exe.resolve()], discovery.candidates([self.root]))
+        out = self.root / 'report.json'
+        with patch.object(sys, 'argv', ['script', '--root', str(self.root), '--no-probe', '-o', str(out)]), contextlib.redirect_stdout(io.StringIO()):
+            self.assertEqual(discovery.main(), 0)
+        report = json.loads(out.read_text())
+        self.assertEqual(report['phocusExecutables'][0]['sha256'], discovery.digest(self.exe))
+        self.assertEqual(report['phocusExecutables'][0]['path'], str(self.exe.resolve()))
+        with patch.object(sys, 'argv', ['script', '--root', str(self.root), '--no-probe', '-o', str(out)]), self.assertRaises(SystemExit):
+            discovery.main()
+
+    def test_probe_timeout_and_output_are_recorded(self):
+        import discover_phocus_windows as discovery
+        result = type('Result', (), {'stdout': 'help', 'stderr': 'version', 'returncode': 0})()
+        with patch.object(discovery.subprocess, 'run', return_value=result) as run:
+            report = discovery.probe(self.exe, 1)
+        self.assertEqual(len(report['probes']), 2)
+        self.assertEqual(run.call_count, 2)
+        self.assertEqual(report['adjacentLayouts'][0]['nameHints'], ['PixelShiftExport.plugin'])

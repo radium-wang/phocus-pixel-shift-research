@@ -25,6 +25,16 @@ Use $phocus-pixel-shift-research on /path/to/my/raw-directory
 
 skill 会先扫描目录。时间间隔和张数只构成候选，需要根据拍摄记录确认分组；确认后，配置好 bridge 才能处理。脚本记录命令、环境开关、文件哈希、Phocus 版本和 bridge 身份。
 
+### Windows Phocus 路径发现
+
+Windows 用户可先运行发现脚本：
+
+```powershell
+python scripts/discover_phocus_windows.py -o phocus-windows-discovery.json
+```
+
+脚本只定位本机安装的 `Phocus.exe`，记录文件哈希，读取有限的 `--version`/`--help` 输出，并列出邻近插件或导出目录中的名称线索。名称线索不等于可用的 4/6/16 张合成入口；报告需要用户在 Phocus 中用样片验证。发现阶段不复制程序文件，也不生成成片。验证出可用入口后，再配置 Windows bridge。
+
 ### 独立运行脚本
 
 ```bash
@@ -81,6 +91,16 @@ Use $phocus-pixel-shift-research on /path/to/my/raw-directory
 ```
 
 The skill first proposes groups. Frame counts and time gaps alone do not prove a capture sequence; confirm grouping against capture records before processing with a configured bridge. Commands, effective environment flags, file hashes, Phocus version and bridge identity are recorded.
+
+### Windows Phocus path discovery
+
+Windows users can start with the discovery script:
+
+```powershell
+python scripts/discover_phocus_windows.py -o phocus-windows-discovery.json
+```
+
+The script locates a locally installed `Phocus.exe`, records its hash, captures bounded `--version`/`--help` output, and lists filename clues in adjacent plugin or export directories. A name is not evidence of a working 4/6/16-frame merge entry; verify the candidate in Phocus with sample frames. Discovery does not copy application files or create merged images. Configure a Windows bridge only after a user-visible entry has been verified.
 
 ### Standalone scripts
 
