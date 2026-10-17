@@ -2,7 +2,7 @@
 
 ## Dependencies and limits
 
-Python 3.10+ is required. Scanning works across platforms; optional `exiftool` provides capture timestamps. Native execution requires macOS, the user's own Phocus installation (default `/Applications/Phocus.app`), and a separately supplied bridge. The repository does not build, download or distribute that bridge or vendor components. Installing the skill alone does not provide merging.
+Python 3.10+ is required. Scanning works across platforms; optional `exiftool` provides capture timestamps. Native execution requires macOS, the user's own Phocus installation (default `/Applications/Phocus.app`), and a separately supplied bridge. The skill may call Phocus components that the user has installed and is authorized to use. The repository does not package, distribute or automatically obtain those components; the user is responsible for confirming the applicable license and permissions. Installing the skill alone does not provide merging.
 
 ## Grouping and manifest
 

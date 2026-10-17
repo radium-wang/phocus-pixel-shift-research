@@ -49,7 +49,7 @@ bridge 必须是用户自己提供的本地可执行文件或脚本。请将示�
 
 ### 范围与合法边界
 
-本仓库只包含原创的编排脚本和文档，不包含 Phocus 二进制、私有框架、提取出的厂商代码、固件补丁、许可证密钥、相机写入代码或云端上传代码。Phocus 及任何 native bridge 均由其各自厂商单独拥有并受其许可约束。请只使用你有权使用的软件和文件。
+Skill 可以调用用户自己安装且有权使用的 Phocus 组件；仓库不打包、分发或自动获取这些组件，用户需自行确认其许可和使用权限。本仓库只包含原创的编排脚本和文档，不包含相机写入代码或云端上传代码。
 
 接受 16 张输入并不等于证明相机存在独立的 16 次拍摄内核或触发协议；manifest 和输出应被视为实验记录。
 
@@ -106,7 +106,7 @@ Offline regression check: `python3 -m unittest discover -s tests -v`. Tests use 
 
 ### Scope and legal boundary
 
-This repository contains only original orchestration scripts and documentation. It does not contain Phocus binaries, private frameworks, extracted vendor code, firmware patches, license keys, camera-write code, or cloud upload code. Phocus and any native bridge remain separately owned and licensed by their respective vendors. Use this skill only with software and files you are authorized to use.
+The skill may call Phocus components that the user has installed and is authorized to use. The repository does not package, distribute or automatically obtain those components; the user is responsible for confirming the applicable license and permissions. This repository contains original orchestration scripts and documentation, with no camera-write code or cloud upload code.
 
 Acceptance of a 16-frame input group does not by itself prove that a distinct 16-shot camera kernel or capture trigger exists. Treat the manifest and output as an experiment record.
 
