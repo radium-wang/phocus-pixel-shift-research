@@ -50,15 +50,16 @@ def candidates(roots: list[Path]) -> list[Path]:
                          root / name):
                 if path.is_file():
                     found.add(path.resolve())
-        try:
-            for path in root.glob("**/Phocus.exe"):
-                try:
-                    if len(path.relative_to(root).parts) <= 5 and path.is_file():
-                        found.add(path.resolve())
-                except ValueError:
-                    continue
-        except OSError:
-            continue
+        # Prune traversal itself, rather than filtering only after a full recursive walk.
+        wanted = {name.lower() for name in NAMES}
+        for directory, subdirs, files in os.walk(root, followlinks=False):
+            here = Path(directory)
+            depth = len(here.relative_to(root).parts)
+            subdirs[:] = [] if depth >= 4 else [n for n in subdirs if not (here / n).is_symlink()]
+            for name in files:
+                path = here / name
+                if name.lower() in wanted and not path.is_symlink():
+                    found.add(path.resolve())
     return sorted(found)
 
 

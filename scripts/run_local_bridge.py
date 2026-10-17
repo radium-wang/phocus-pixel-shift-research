@@ -228,7 +228,7 @@ def main():
                     raise ValueError('Bridge timed out; process group terminated')
                 if code:
                     raise ValueError(f'Bridge exited {code}; see stderr.log')
-                if not merged.is_file() or merged.stat().st_size == 0:
+                if not args.native_tiff and (not merged.is_file() or merged.stat().st_size == 0):
                     raise ValueError('Bridge returned success without a nonempty intermediate output')
                 if args.native_tiff:
                     inspected = next((a for a in record['artifacts'] if a['kind'] == 'TIFF'), None)

@@ -11,3 +11,11 @@ runs/
 *.log
 .env
 __pycache__/
+
+# Local build artifacts
+build/
+builds/
+*.o
+*.obj
+*.exe
+*.dll

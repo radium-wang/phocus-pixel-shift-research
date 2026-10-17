@@ -1,6 +1,6 @@
 interface:
   display_name: "Phocus Pixel Shift Research"
-  short_description: "Run local Phocus pixel-shift research"
-  default_prompt: "Use $phocus-pixel-shift-research to process a directory of Hasselblad X2D 3FR pixel-shift frames with the user's local Phocus route."
+  short_description: "Build a local Phocus adapter or research Windows support"
+  default_prompt: "Use $phocus-pixel-shift-research to check local Phocus, build the supported Mac adapter, or investigate Windows interfaces before processing Hasselblad X2D 3FR sequences. Report unsupported platforms honestly."
 policy:
   allow_implicit_invocation: true

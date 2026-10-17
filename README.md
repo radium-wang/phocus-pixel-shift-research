@@ -2,132 +2,163 @@
 
 ## 中文版
 
-运行环境：Python 3.10+；扫描可跨平台，原厂路径执行限 macOS。
+用于本地哈苏 X2D 100C 像素位移实验的 Codex skill：扫描原片、确认分组、检查本机 Phocus、编译原创适配桥、验证依赖，再调用原厂处理和 TIFF 导出路径。默认保留原片，不上传照片。
 
-这是一个用于研究哈苏 X 系统像素位移序列的本地 Codex skill。它通过用户自己授权的 Phocus 安装和用户提供的本地 bridge，扫描、记录并运行 3FR 序列处理实验。
+### 平台状态
 
-**前提：本仓库不附带 native bridge。只有 skill 和照片目录可以完成扫描；合成还需要另行配置的 bridge、可信构建记录中的 SHA-256、macOS 和本机 Phocus。它不是开箱即用的独立合成软件。**
+| 平台 | 当前能力 |
+| --- | --- |
+| Apple Silicon Mac + 本仓库锁定的 Phocus 4.1.1 | 包含原创桥源码；支持本地编译、依赖验证、4／6／16 张原厂 TIFF 路径实验 |
+| Intel Mac 或其他 Phocus 构建 | 尚未适配；版本或组件哈希不匹配会停止 |
+| Windows | 可扫描、发现本地安装，并按 skill 指导研究接口及开发桥；**尚无已实现、验收通过的 Windows 合成桥** |
 
-### 功能
+Python 3.10+；Mac 编译需要 Apple Command Line Tools 的 `clang++`。本仓库不安装 Phocus 或编译器，不附带预编译的桥。
 
-- 扫描目录中的 `.3FR` 文件，列出 4、6、16 张的候选分组，执行前需要确认实际拍摄分组。
-- 为每组输入生成可复现实验 manifest、文件哈希和运行日志。
-- 调用用户本机的 native bridge，执行本地 Phocus 处理路径。
-- 输出目录由用户指定，默认不上传照片或实验数据。
+### 在对话中使用
 
-### 在 Codex 中使用
-
-加载本 skill 后，直接告诉 agent 原始照片目录：
+安装或加载 skill 后，告诉 agent：
 
 ```text
-Use $phocus-pixel-shift-research on /path/to/my/raw-directory
+使用 $phocus-pixel-shift-research，检查本机 Phocus，编译兼容的桥，处理 /path/to/raw 中的照片。
 ```
 
-skill 会先扫描目录。时间间隔和张数只构成候选，需要根据拍摄记录确认分组；确认后，配置好 bridge 才能处理。脚本记录命令、环境开关、文件哈希、Phocus 版本和 bridge 身份。
+支持的 Mac 环境不再要求用户自己寻找现成 bridge 或输入哈希；agent 从本地构建记录读取这些配置。张数与时间只能确定候选分组，需要按实际拍摄序列确认顺序。Windows 会进入本地适配开发流程，缺少接口证据时明确报告阻塞，不能把发现成功说成合成成功。
 
-### Windows Phocus 路径发现
-
-Windows 用户可先运行发现脚本：
-
-```powershell
-python scripts/discover_phocus_windows.py -o phocus-windows-discovery.json
-```
-
-脚本只定位本机安装的 `Phocus.exe`，记录文件哈希，读取有限的 `--version`/`--help` 输出，并列出邻近插件或导出目录中的名称线索。名称线索不等于可用的 4/6/16 张合成入口；报告需要用户在 Phocus 中用样片验证。发现阶段不复制程序文件，也不生成成片。验证出可用入口后，再配置 Windows bridge。
-
-### 独立运行脚本
+### Mac 本地编译和运行
 
 ```bash
+# 每次使用新目录；只检查依赖和编译，不处理照片。
+python3 scripts/prepare_native_bridge.py -o /path/to/new-build
+
+# 查看候选，核对实际拍摄顺序。
 python3 scripts/scan_3fr_sequences.py /path/to/raw \
   --manifest /path/to/candidates.json
 
-# 核对实际拍摄序列后再确认 group-001。
+# 核对后确认；多组可重复 --confirm-group，或提供有序 --groups-file。
 python3 scripts/scan_3fr_sequences.py /path/to/raw \
   --manifest /path/to/confirmed.json --confirm-group group-001
-
-python3 scripts/run_local_bridge.py /path/to/confirmed.json \
-  --output-root /path/to/new-output \
-  --bridge /path/to/native-fff-bridge \
-  --bridge-sha256 TRUSTED_64_CHARACTER_SHA256
 ```
 
-bridge 必须是用户自己提供的本地可执行文件或脚本。请将示例哈希占位符替换为可信构建记录中的实际值；runner 不再自动搜索执行程序。默认每组超时 3600 秒，可用 `--timeout-seconds` 调整。
+`new-build/build.json` 记录 bridge 路径、SHA-256、编译命令、源码哈希及兼容性结果。将其中的值传给 runner：
 
-上述命令保留 FFF/RGB 中间结果。完整 TIFF 请求还需添加 `--native-tiff --bridge-profile /path/to/profile.json`，profile 必须声明支持的环境变量；格式见下方参考文档。TIFF 检查仅验证首个 IFD 的尺寸、位深和通道等元数据，不证明 HNCS 或完整原厂显色。失败组会保留记录并继续下一组；中断会停止，临时文件默认保留。
+```bash
+python3 scripts/run_local_bridge.py /path/to/confirmed.json \
+  --output-root /path/to/new-output \
+  --bridge /path/to/new-build/native-fff-bridge \
+  --bridge-sha256 SHA256_FROM_LOCAL_BUILD_JSON \
+  --bridge-profile /path/to/new-build/bridge-profile.json \
+  --native-tiff
+```
 
-离线回归检查：`python3 -m unittest discover -s tests -v`。测试使用模拟文件和 bridge，不代表已验证真实 Phocus 合成。
+当前桥固定使用 `/Applications/Phocus.app`。编译前和运行时检查指定组件哈希；不匹配应研究新版本接口，不能把当前哈希填入旧配置强行运行。构建成功只是依赖验收，最终以样片实际处理结果为准。
 
-### 范围与合法边界
+### Windows 本地适配流程
 
-Skill 可以调用用户自己安装且有权使用的 Phocus 组件；仓库不打包、分发或自动获取这些组件，用户需自行确认其许可和使用权限。本仓库只包含原创的编排脚本和文档，不包含相机写入代码或云端上传代码。
+```powershell
+python scripts/prepare_native_bridge.py -o C:\work\new-phocus-build
+```
 
-接受 16 张输入并不等于证明相机存在独立的 16 次拍摄内核或触发协议；manifest 和输出应被视为实验记录。
+当前 Windows 分支只生成发现和待开发报告，退出码为 3。它不会编译一个假桥。agent 随后按 [Windows 开发与验收流程](references/windows-native-development.md) 检查本机 PE 模块、接口和 ABI，在证据充分时编写并编译原创适配代码，再用样片验证。**目前不能承诺 Windows 用户仅提供照片目录就能自动合成。**
 
-完整流程见 [`SKILL.md`](SKILL.md) 和 [`references/implementation-contract.md`](references/implementation-contract.md)。
+已静态检查官方 Windows 4.1.1 安装包，发现 `PhocusApi64.dll` 的 multi-shot API 线索；详见 [Windows 静态检查](references/windows-4.1.1-static-findings.md)。这不等于合成验收。
+
+只做安装发现：
+
+```powershell
+python scripts/discover_phocus_windows.py --no-probe -o phocus-windows-discovery.json
+```
+
+### 验证、输出与限制
+
+- 原片在启动每组前核对 SHA-256；失败组保留记录并继续，中断会停止，默认每组超时 3600 秒。
+- 本地记录包括版本、组件／桥哈希、有效环境变量、命令、原始字节日志、部分输出及清理记录。
+- 完整 TIFF 请求不要求额外的 positional 中间文件；桥可能只生成 roundtrip FFF 与 TIFF。
+- TIFF 首 IFD 元数据检查不证明所有像素正确，也不证明 GUI 等价或 HNCS 色彩参考一致。
+- RAW 中间文件预览借用首张原片；16 张输入不证明存在独立 16-shot 内核；缺失的坏点信息等研究限制仍保留。
+- 临时文件默认保留。若只需验收不留成片，agent 在专用临时目录处理、检查并清理，只保存日志和数值。
+
+离线测试：`python3 -m unittest discover -s tests -v`。真实验收范围见 [validation.md](references/validation.md)。完整契约见 [implementation-contract.md](references/implementation-contract.md)。
+
+### 组件使用
+
+Skill 可以调用用户自己安装且有权使用的 Phocus 组件；仓库不打包、分发或自动获取这些组件，用户需自行确认其许可和使用权限。本仓库提供原创编排与适配源码，不包含相机写入或云端上传代码。
 
 ---
 
 ## English version
 
-Requirements: Python 3.10+. Scanning is cross-platform; native execution requires macOS.
+A local Codex skill for Hasselblad X2D 100C pixel-shift experiments: scan frames, confirm grouping, inspect local Phocus, compile an original adapter, verify dependencies, then invoke native processing and TIFF export. Originals are preserved and photos are not uploaded by default.
 
-A local Codex skill for researching Hasselblad X-System pixel-shift sequences through the user's own licensed Phocus installation and a user-supplied local bridge.
+### Platform status
 
-**Prerequisite: this repository does not include a native bridge. The skill and photo directory alone support scanning. Merging additionally requires a separately configured bridge, a trusted expected SHA-256, macOS and local Phocus. This is not a standalone, ready-to-run merger.**
+| Platform | Current capability |
+| --- | --- |
+| Apple Silicon Mac + the exact pinned Phocus 4.1.1 build | Original adapter source, local compilation, dependency checks, experimental native TIFF processing for 4/6/16-frame sequences |
+| Intel Mac or other Phocus builds | Not adapted; version or component hash mismatches stop execution |
+| Windows | Local scanning/discovery and guided interface/adapter development; **no implemented, accepted Windows merge adapter yet** |
 
-### Features
+Python 3.10+ is required. Mac compilation uses Apple's Command Line Tools `clang++`. This repository does not install Phocus/compiler tools or ship a prebuilt adapter.
 
-- Scans `.3FR` files and proposes 4-, 6-, and 16-frame groups that require capture-group confirmation.
-- Writes reproducible manifests, file hashes, and run logs.
-- Invokes a user-local native bridge for the local Phocus processing route.
-- Writes to a user-selected output directory and does not upload images by default.
+### Conversational use
 
-### Use in Codex
-
-After loading this skill in Codex, give the agent the directory containing the raw frames:
+After installing or loading the skill:
 
 ```text
-Use $phocus-pixel-shift-research on /path/to/my/raw-directory
+Use $phocus-pixel-shift-research to check local Phocus, compile a compatible bridge and process /path/to/raw.
 ```
 
-The skill first proposes groups. Frame counts and time gaps alone do not prove a capture sequence; confirm grouping against capture records before processing with a configured bridge. Commands, effective environment flags, file hashes, Phocus version and bridge identity are recorded.
+The supported Mac route no longer requires users to locate a prebuilt bridge or supply its hash manually; the agent reads local build records. Frame counts and timestamps provide candidates, not capture-order proof. Windows enters local adapter development and must report missing evidence honestly.
 
-### Windows Phocus path discovery
-
-Windows users can start with the discovery script:
-
-```powershell
-python scripts/discover_phocus_windows.py -o phocus-windows-discovery.json
-```
-
-The script locates a locally installed `Phocus.exe`, records its hash, captures bounded `--version`/`--help` output, and lists filename clues in adjacent plugin or export directories. A name is not evidence of a working 4/6/16-frame merge entry; verify the candidate in Phocus with sample frames. Discovery does not copy application files or create merged images. Configure a Windows bridge only after a user-visible entry has been verified.
-
-### Standalone scripts
+### Compile and run on Mac
 
 ```bash
+# Use new directories. Preparation checks/builds without processing photos.
+python3 scripts/prepare_native_bridge.py -o /path/to/new-build
+
 python3 scripts/scan_3fr_sequences.py /path/to/raw \
   --manifest /path/to/candidates.json
 
-# Confirm group-001 only after reviewing the capture sequence.
+# Confirm only after reviewing capture order; repeat for additional groups.
 python3 scripts/scan_3fr_sequences.py /path/to/raw \
   --manifest /path/to/confirmed.json --confirm-group group-001
 
 python3 scripts/run_local_bridge.py /path/to/confirmed.json \
   --output-root /path/to/new-output \
-  --bridge /path/to/native-fff-bridge \
-  --bridge-sha256 TRUSTED_64_CHARACTER_SHA256
+  --bridge /path/to/new-build/native-fff-bridge \
+  --bridge-sha256 SHA256_FROM_LOCAL_BUILD_JSON \
+  --bridge-profile /path/to/new-build/bridge-profile.json \
+  --native-tiff
 ```
 
-Supply your own local bridge and replace the hash placeholder with a trusted build digest. The runner no longer discovers executables automatically. The per-group timeout defaults to 3600 seconds; configure it with `--timeout-seconds`.
+Read the actual bridge path/hash from `new-build/build.json`. That record also includes source hashes, command and dependency results. The current adapter requires `/Applications/Phocus.app`. Do not replace pinned hashes to force unsupported private ABI layouts through. Compilation/dependency checks do not replace sample-processing acceptance.
 
-These commands retain intermediate FFF/RGB results. For TIFF export, also pass `--native-tiff --bridge-profile /path/to/profile.json` with declared environment capabilities; see the contract below. TIFF inspection validates first-IFD metadata only, not HNCS or complete native color processing. Failed groups retain records and continue; interruption stops the run. Temporary files are retained by default.
+### Windows local adaptation
 
-Offline regression check: `python3 -m unittest discover -s tests -v`. Tests use fixture files and bridges, not real Phocus merges.
+```powershell
+python scripts/prepare_native_bridge.py -o C:\work\new-phocus-build
+```
 
-### Scope and legal boundary
+The Windows branch currently writes discovery/development records and exits 3; it does not compile a placeholder bridge. The agent follows [Windows development and acceptance](references/windows-native-development.md) to inspect local PE interfaces/ABI, implement original code when evidence supports it, compile and validate samples. **A photo-directory-only Windows merge workflow is not yet available.**
 
-The skill may call Phocus components that the user has installed and is authorized to use. The repository does not package, distribute or automatically obtain those components; the user is responsible for confirming the applicable license and permissions. This repository contains original orchestration scripts and documentation, with no camera-write code or cloud upload code.
+The official Windows 4.1.1 package has been statically inspected; multi-shot API clues in `PhocusApi64.dll` are recorded in [Windows static findings](references/windows-4.1.1-static-findings.md). This is not merge acceptance.
 
-Acceptance of a 16-frame input group does not by itself prove that a distinct 16-shot camera kernel or capture trigger exists. Treat the manifest and output as an experiment record.
+Inventory without launching Phocus:
 
-See [`SKILL.md`](SKILL.md) and [`references/implementation-contract.md`](references/implementation-contract.md) for the full workflow and bridge contract.
+```powershell
+python scripts/discover_phocus_windows.py --no-probe -o phocus-windows-discovery.json
+```
+
+### Validation, artifacts and limits
+
+- Inputs are hash-checked before each group. Normal failures retain records and continue; interruption stops. Default timeout is 3600 seconds per group.
+- Records include versions, dependency/bridge hashes, effective environment, commands, raw byte logs, partial artifacts and cleanup policy.
+- Native TIFF export can succeed with a roundtrip FFF and TIFF only, without the positional intermediate artifact.
+- First-IFD metadata inspection does not prove pixel correctness, GUI equivalence or HNCS color-reference agreement.
+- Intermediate RAW previews inherit the first source preview. Sixteen inputs do not establish a distinct 16-shot kernel; other research limitations remain explicit.
+- Temporary files are retained by default. For disposable validation, the agent uses an isolated temporary directory, verifies and removes image artifacts, retaining numerical evidence/logs only.
+
+Offline tests: `python3 -m unittest discover -s tests -v`. See [validation.md](references/validation.md) for actual acceptance scope and [implementation-contract.md](references/implementation-contract.md) for the contract.
+
+### Component use
+
+The skill may call Phocus components that the user has installed and is authorized to use. The repository does not package, distribute or automatically obtain those components; the user is responsible for confirming the applicable license and permissions. This repository provides original orchestration/adapter source, without camera-write or cloud-upload code.

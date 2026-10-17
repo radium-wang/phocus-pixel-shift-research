@@ -2,7 +2,7 @@
 
 ## Dependencies and limits
 
-Python 3.10+ is required. Scanning works across platforms; optional `exiftool` provides capture timestamps. Native execution requires macOS, the user's own Phocus installation (default `/Applications/Phocus.app`), and a separately supplied bridge. The skill may call Phocus components that the user has installed and is authorized to use. The repository does not package, distribute or automatically obtain those components; the user is responsible for confirming the applicable license and permissions. Installing the skill alone does not provide merging. On Windows, `discover_phocus_windows.py` produces a read-only inventory report and bounded help/version probes; it does not prove a merge path.
+Python 3.10+ is required. Scanning works across platforms; optional `exiftool` provides capture timestamps. Native execution requires macOS, the user's own Phocus installation (default `/Applications/Phocus.app`), and a local bridge. For the hash-pinned Phocus 4.1.1 ARM64 build, original source is included under `native/macos` and compiled by `prepare_native_bridge.py`. The skill may call Phocus components that the user has installed and is authorized to use. The repository does not package, distribute or automatically obtain those components; the user is responsible for confirming the applicable license and permissions. The supported Mac route compiles the included original adapter locally; installing the skill does not install Phocus or compiler tools. Windows still needs independently developed adapter source and runtime acceptance. On Windows, `discover_phocus_windows.py` produces a read-only inventory report and bounded help/version probes; it does not prove a merge path.
 
 ## Grouping and manifest
 
@@ -28,7 +28,7 @@ Only `--bridge` (highest priority) or `PHOCUS_NATIVE_BRIDGE` is used. No directo
 native-fff-bridge <frames> <output> <frame-1.3FR> ... <frame-N.3FR>
 ```
 
-4/6-frame destinations use `.fff`; 16-frame destinations use `.rgb16`. These are intermediates, not finished color-managed images. A successful exit must produce a nonempty intermediate. An explicit native TIFF request must also produce an inspectable TIFF.
+4/6-frame destinations use `.fff`; 16-frame destinations use `.rgb16`. These are intermediates, not finished color-managed images. Without a native TIFF request, a successful exit must produce a nonempty intermediate. With `--native-tiff`, the required artifact is an inspectable TIFF; the calibrated adapter may produce only its roundtrip FFF plus TIFF and no separate positional intermediate.
 
 The runner rejects non-macOS execution and records Phocus version/build from `Contents/Info.plist`. It supports `--phocus-app` for a user-installed alternate location. It does not assert that the bundle is vendor-authentic merely because Info.plist exists.
 
@@ -78,3 +78,9 @@ Run `python3 -m unittest discover -s tests -v`. Tests use synthetic `.3FR` bytes
 Run `python scripts/discover_phocus_windows.py -o phocus-windows-discovery.json` on Windows. Use `--phocus C:\Path\to\Phocus.exe` for an explicit executable or repeat `--root` for an offline fixture. The default search checks common Program Files and Local AppData layouts and uses a bounded recursive search of each supplied root.
 
 The report contains the executable path, SHA-256, bounded `--version` and `--help` output, adjacent layout directories, and filename hints containing terms such as `multishot`, `pixel`, `shift`, `merge`, `export`, `batch`, `cli`, or `headless`. These are discovery clues only. The script never copies, modifies, decompiles or patches Phocus files and never creates merged image output. A user must verify a candidate workflow visibly in their licensed Phocus installation before configuring a Windows bridge.
+
+## Included Mac source and build
+
+`native/macos` contains original ABI adapter source, pinned dependency metadata and a direct-execution hash guard. It does not contain vendor machine code or resources. Private function offsets/object layouts are specific to the recorded build. `prepare_native_bridge.py` checks exact dependency hashes (including the English strings resource), compiles with the installed `clang++` and Phocus framework rpath, invokes `--check`, and records source/binary hashes and the supported profile. Compiler logs and build records remain local. It does not download components or modify Phocus. A failed build/dependency check returns nonzero with a diagnostic record. Windows returns exit 3 and a development report instead of compiling a placeholder.
+
+A build's `--check` validates installed component identities; it does not call the image-processing path or prove GUI equivalence. Real sample acceptance is separately required. Known limitations include first-frame RAW preview, unverified GUI color-reference equivalence and a 16-frame path that does not prove a distinct capture kernel. See [windows-native-development.md](windows-native-development.md) for Windows development requirements.

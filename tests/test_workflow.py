@@ -169,7 +169,7 @@ class WorkflowTests(unittest.TestCase):
             self.run_bridge(self.manifest(), '--bridge-profile', profile)
 
     def test_native_tiff_profile_and_inspection(self):
-        self.bridge.write_text(f"#!{sys.executable}\nimport os, sys, struct\nfrom pathlib import Path\nPath(sys.argv[2]).write_bytes(b'intermediate')\ntags=[(256,4,1,12),(257,4,1,8),(258,3,1,16),(277,3,1,3)]\nb=b'II'+struct.pack('<HIH',42,8,len(tags))\nfor t,k,n,v in tags:\n b+=struct.pack('<HHI',t,k,n)+(struct.pack('<H',v)+b'\\0\\0' if k==3 else struct.pack('<I',v))\nPath(os.environ['PHOCUS_NATIVE_TIFF_FILE']).write_bytes(b+b'\\0'*4)\n")
+        self.bridge.write_text(f"#!{sys.executable}\nimport os, sys, struct\nfrom pathlib import Path\ntags=[(256,4,1,12),(257,4,1,8),(258,3,1,16),(277,3,1,3)]\nb=b'II'+struct.pack('<HIH',42,8,len(tags))\nfor t,k,n,v in tags:\n b+=struct.pack('<HHI',t,k,n)+(struct.pack('<H',v)+b'\\0\\0' if k==3 else struct.pack('<I',v))\nPath(os.environ['PHOCUS_NATIVE_TIFF_FILE']).write_bytes(b+b'\\0'*4)\n")
         profile = self.base / 'profile.json'
         profile.write_text(json.dumps({'supportedEnvironment': ['PHOCUS_NATIVE_TIFF_FILE', 'PHOCUS_ROUNDTRIP_FILE', 'PHOCUS_RETAIN_NATIVE_TIFF']}))
         self.assertEqual(self.run_bridge(self.manifest(), '--native-tiff', '--bridge-profile', profile), 0)
@@ -236,8 +236,6 @@ class WorkflowTests(unittest.TestCase):
             inspect_tiff(path)
 
 
-if __name__ == '__main__':
-    unittest.main()
 
 class WindowsDiscoveryTests(unittest.TestCase):
     def setUp(self):
@@ -260,8 +258,19 @@ class WindowsDiscoveryTests(unittest.TestCase):
         report = json.loads(out.read_text())
         self.assertEqual(report['phocusExecutables'][0]['sha256'], discovery.digest(self.exe))
         self.assertEqual(report['phocusExecutables'][0]['path'], str(self.exe.resolve()))
-        with patch.object(sys, 'argv', ['script', '--root', str(self.root), '--no-probe', '-o', str(out)]), self.assertRaises(SystemExit):
+        with patch.object(sys, 'argv', ['script', '--root', str(self.root), '--no-probe', '-o', str(out)]), contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit):
             discovery.main()
+
+    def test_versioned_phocus64_install_layout(self):
+        import discover_phocus_windows as discovery
+        executable = self.root / 'Hasselblad' / 'Phocus 4.1.1' / 'Phocus64.exe'
+        executable.parent.mkdir()
+        executable.write_bytes(b'fixture')
+        self.assertIn(executable.resolve(), discovery.candidates([self.root]))
+        too_deep = self.root / 'a/b/c/d/e/Phocus.exe'
+        too_deep.parent.mkdir(parents=True)
+        too_deep.write_bytes(b'fixture')
+        self.assertNotIn(too_deep.resolve(), discovery.candidates([self.root]))
 
     def test_probe_timeout_and_output_are_recorded(self):
         import discover_phocus_windows as discovery
@@ -271,3 +280,56 @@ class WindowsDiscoveryTests(unittest.TestCase):
         self.assertEqual(len(report['probes']), 2)
         self.assertEqual(run.call_count, 2)
         self.assertEqual(report['adjacentLayouts'][0]['nameHints'], ['PixelShiftExport.plugin'])
+
+
+class NativeBuildTests(unittest.TestCase):
+    def setUp(self):
+        import prepare_native_bridge as build
+        self.build = build
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.root = Path(self.tmp.name).resolve()
+
+    def test_mac_dependency_validation(self):
+        app = self.root / 'Phocus.app'
+        (app / 'Contents').mkdir(parents=True)
+        with (app / 'Contents/Info.plist').open('wb') as f:
+            plistlib.dump({'CFBundleShortVersionString': '4.1.1'}, f)
+        dependency = app / 'Contents/fixture'
+        dependency.write_bytes(b'fixture')
+        spec = {'phocusPath': str(app), 'phocusVersion': '4.1.1',
+                'frameworkSha256': {'Contents/fixture': scan.sha256(dependency)}}
+        result = self.build.check_mac_install(app, spec)
+        self.assertEqual(result['version'], '4.1.1')
+        dependency.write_bytes(b'changed')
+        with self.assertRaises(ValueError):
+            self.build.check_mac_install(app, spec)
+        with self.assertRaises(ValueError):
+            self.build.check_mac_install(app, {**spec, 'phocusVersion': '9.9'})
+
+    def test_windows_reports_missing_adapter_without_compilation(self):
+        completed = type('Completed', (), {'stdout': b'fixture', 'stderr': b'', 'returncode': 0})()
+        out = self.root / 'build'
+        with patch.object(self.build.platform, 'system', return_value='Windows'), patch.object(self.build.subprocess, 'run', return_value=completed) as run:
+            self.assertEqual(call(self.build, ['-o', out]), 3)
+        self.assertEqual(run.call_count, 1)
+        data = json.loads((out / 'build.json').read_text())
+        self.assertEqual(data['status'], 'windows-adapter-required')
+        self.assertNotIn('bridge', data)
+
+    def test_guard_hashes_match_committed_profile(self):
+        directory = Path(__file__).resolve().parents[1] / 'native/macos'
+        spec = json.loads((directory / 'compatibility.json').read_text())
+        guard = (directory / 'compatibility_guard.hpp').read_text()
+        for relative, expected in spec['frameworkSha256'].items():
+            self.assertIn('{"' + relative + '", "' + expected + '"}', guard)
+
+    def test_unsupported_host_records_failure(self):
+        out = self.root / 'build'
+        with patch.object(self.build.platform, 'system', return_value='Linux'):
+            self.assertEqual(call(self.build, ['-o', out]), 1)
+        self.assertEqual(json.loads((out / 'build.json').read_text())['status'], 'failed')
+
+
+if __name__ == '__main__':
+    unittest.main()
